@@ -1,0 +1,46 @@
+name: Deploy to Hugging Face
+on:
+  push:
+    branches: ['main']
+  pull_request:
+    branches: ['main']
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          sparse-checkout: |
+            model
+
+      - name: Push to Hugging Face
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          pip install huggingface_hub
+          python << 'EOF'
+          from huggingface_hub import HfApi, create_repo
+          import os
+          
+          token = os.environ['HF_TOKEN']
+          repo_id = "alexandercoop/tiny_shakespeare"
+          
+          # Create repo if it doesn't exist
+          try:
+              create_repo(repo_id, token=token, repo_type="model", exist_ok=True, private=False)
+          except Exception as e:
+              print(f"Repo creation note: {e}")
+          
+          # Upload files
+          api = HfApi()
+          api.upload_folder(
+              folder_path="model",
+              repo_id=repo_id,
+              repo_type="model",
+              token=token,
+              commit_message="Sync from GitHub"
+          )
+          print(f"Successfully synced to https://huggingface.co/{repo_id}")
+          EOF

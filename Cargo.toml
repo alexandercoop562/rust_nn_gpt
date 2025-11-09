@@ -1,0 +1,3 @@
+[workspace]
+resolver = "3"
+members = ["rust_nn_gpt", "tiny_shakespeare", "wgpu_wrapper"]

@@ -1,0 +1,7 @@
+[package]
+name = "tiny_shakespeare"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+rust_nn_gpt = { path = "../rust_nn_gpt" }

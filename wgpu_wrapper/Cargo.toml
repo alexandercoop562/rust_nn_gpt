@@ -1,0 +1,13 @@
+[package]
+name = "wgpu_wrapper"
+version = "0.1.0"
+edition = "2024"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
+
+[dependencies]
+wgpu = "27"
+tokio = { version = "1.48", features = ["macros", "rt"] }
+bytemuck = "1.14"
+futures-intrusive = "0.5"
