@@ -34,7 +34,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let model_config = Config {
         path: "model/",
         device: &device,
-        vocab_size: tokenizer.vocab_size,
+        input_vocab_size: tokenizer.vocab_size,
+        output_vocab_size: tokenizer.vocab_size,
         height: 64,
         layers: 8,
         context_window: 128,

@@ -17,9 +17,6 @@ mod moe;
 
 use block::Block;
 
-// use mla_attention::MLAAttention;
-// use moe::MixtureOfExperts;
-
 pub fn xavier_uniform_init(input_dim: i64, output_dim: i64) -> Init {
     let limit = (6.0_f64 / (input_dim + output_dim) as f64).sqrt();
 
@@ -52,7 +49,8 @@ pub struct MoEConfig {
 pub struct Config<'d> {
     pub path: &'d str,
     pub device: &'d Device,
-    pub vocab_size: i64,
+    pub input_vocab_size: i64,
+    pub output_vocab_size: i64,
     pub height: i64,
     pub layers: i64,
     pub context_window: i64,
@@ -87,7 +85,7 @@ impl<'c> Transformer<'c> {
 
         let token_embedding_table = nn::embedding(
             &root / "token_emb",
-            config.vocab_size,
+            config.input_vocab_size,
             config.height,
             Default::default(),
         );
@@ -127,9 +125,9 @@ impl<'c> Transformer<'c> {
         let language_model_head = nn::linear(
             &root / "lm_head",
             config.height,
-            config.vocab_size,
+            config.output_vocab_size,
             LinearConfig {
-                ws_init: xavier_uniform_init(config.height, config.vocab_size),
+                ws_init: xavier_uniform_init(config.height, config.output_vocab_size),
                 ..Default::default()
             },
         );
@@ -277,6 +275,19 @@ impl<'c> Transformer<'c> {
         return (train_mean_loss, val_mean_loss);
     }
 
+    pub fn predict(&self, input: Vec<i64>) -> Result<Vec<i64>, Box<dyn Error>> {
+        return tch::no_grad(|| {
+            let input_tensor = Tensor::from_slice(&input)
+                .to_device(*self.config.device)
+                .unsqueeze(0);
+
+            let (logits, _loss) = self.forward(&input_tensor, None, false);
+            let flattened_logits = logits.flatten(0, -1);
+
+            return Ok(Vec::<i64>::try_from(flattened_logits)?);
+        });
+    }
+
     pub fn generate(&self, token_indices: &Tensor, max_new_tokens: i64) -> Tensor {
         return tch::no_grad(|| {
             let mut current_indices = token_indices.shallow_clone();
@@ -316,7 +327,8 @@ impl<'c> Transformer<'c> {
         // Save config as JSON (Hugging Face compatible)
         let config = serde_json::json!({
             "model_type": "rust_nn_gpt",
-            "vocab_size": self.config.vocab_size,
+            "input_vocab_size": self.config.input_vocab_size,
+            "output_vocab_size": self.config.output_vocab_size,
             "hidden_size": self.embedding_dim,
             "num_hidden_layers": self.num_layers,
             "num_attention_heads": self.num_attention_heads,
@@ -346,9 +358,12 @@ impl<'c> Transformer<'c> {
         let config: serde_json::Value = serde_json::from_str(&config_str)?;
 
         // Extract config values
-        let vocab_size = config["vocab_size"]
+        let input_vocab_size = config["input_vocab_size"]
             .as_i64()
-            .ok_or("Missing or invalid vocab_size in config")?;
+            .ok_or("Missing or invalid input_vocab_size in config")?;
+        let output_vocab_size = config["output_vocab_size"]
+            .as_i64()
+            .ok_or("Missing or invalid output_vocab_size in config")?;
         let height = config["hidden_size"]
             .as_i64()
             .ok_or("Missing or invalid hidden_size in config")?;
@@ -384,7 +399,8 @@ impl<'c> Transformer<'c> {
         let model_config = Config {
             path,
             device,
-            vocab_size,
+            input_vocab_size,
+            output_vocab_size,
             height,
             layers,
             context_window: block_size,
